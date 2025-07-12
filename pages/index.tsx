@@ -107,12 +107,12 @@ const formatTime = (time: number): number => {
   return Math.floor(time);
 };
 
-const summarizeData = (data: any[][], srbnMultiplier: number, hfexMultiplier: number): any[][] => {
+const summarizeData = (data: any[][], srbnMultiplier: number, hfexMultiplier: number, individualMultipliers: { [key: string]: number } = {}): any[][] => {
   if (!data || !Array.isArray(data) || data.length === 0) return [];
 
   // Group data by date (index 2)
   const summaries: { [date: string]: { index3Sum: number; index4Sum: number; paymentSum: number } } = {};
-  data.forEach(row => {
+  data.forEach((row, rowIndex) => {
     const date = row[2];
     if (date && typeof row[3] === 'number' && typeof row[4] === 'number') {
       if (!summaries[date]) {
@@ -121,8 +121,9 @@ const summarizeData = (data: any[][], srbnMultiplier: number, hfexMultiplier: nu
       summaries[date].index3Sum += row[3];
       summaries[date].index4Sum += row[4];
       
-      // Calculate payment for this row
-      const payment = calculatePayment(row[1], row[4], srbnMultiplier, hfexMultiplier);
+      // Calculate payment for this row using individual multiplier if available
+      const individualMultiplier = individualMultipliers[`${rowIndex}-9`];
+      const payment = calculatePayment(row[1], row[4], srbnMultiplier, hfexMultiplier, individualMultiplier);
       summaries[date].paymentSum += payment;
     }
   });
@@ -131,7 +132,7 @@ const summarizeData = (data: any[][], srbnMultiplier: number, hfexMultiplier: nu
   const result: any[][] = [];
   let currentDate: string | null = null;
 
-  data.forEach(row => {
+  data.forEach((row, rowIndex) => {
     const date = row[2];
     
     // If the date changes or it's the last row, add a summary for the previous date
@@ -147,13 +148,17 @@ const summarizeData = (data: any[][], srbnMultiplier: number, hfexMultiplier: nu
         null,
         null,
         null,
+        null,
         `Fizetés teljes összege: ${Math.round(summaries[currentDate].paymentSum)}`
       ]);
     }
     
-    // Add the current row to the result with payment column
-    const payment = calculatePayment(row[1], row[4], srbnMultiplier, hfexMultiplier);
-    const rowWithPayment = [...row, payment];
+    // Add the current row to the result with payment column and multiplier column
+    const individualMultiplier = individualMultipliers[`${rowIndex}-9`];
+    const payment = calculatePayment(row[1], row[4], srbnMultiplier, hfexMultiplier, individualMultiplier);
+    const defaultMultiplier = row[1] && row[1].toString().toUpperCase().includes('SRBN') ? srbnMultiplier : 
+                             row[1] && row[1].toString().toUpperCase().includes('HF-EX') ? hfexMultiplier : 0;
+    const rowWithPayment = [...row, individualMultiplier || defaultMultiplier, payment];
     result.push(rowWithPayment);
     
     currentDate = date;
@@ -172,6 +177,7 @@ const summarizeData = (data: any[][], srbnMultiplier: number, hfexMultiplier: nu
       null,
       null,
       null,
+      null,
       `Fizetés teljes összege: ${Math.round(summaries[currentDate].paymentSum)}`
     ]);
   }
@@ -179,12 +185,12 @@ const summarizeData = (data: any[][], srbnMultiplier: number, hfexMultiplier: nu
   return result;
 };
 
-const summarizeDataDetailed = (data: any[][], srbnMultiplier: number, hfexMultiplier: number): any[][] => {
+const summarizeDataDetailed = (data: any[][], srbnMultiplier: number, hfexMultiplier: number, individualMultipliers: { [key: string]: number } = {}): any[][] => {
   if (!data || !Array.isArray(data) || data.length === 0) return [];
 
   // Group data by date (index 2), only sum index 4
   const summaries: { [date: string]: { index4Sum: number; paymentSum: number } } = {};
-  data.forEach(row => {
+  data.forEach((row, rowIndex) => {
     const date = row[2];
     if (date && typeof row[4] === 'number') {
       if (!summaries[date]) {
@@ -192,8 +198,9 @@ const summarizeDataDetailed = (data: any[][], srbnMultiplier: number, hfexMultip
       }
       summaries[date].index4Sum += row[4];
       
-      // Calculate payment for this row
-      const payment = calculatePayment(row[1], row[4], srbnMultiplier, hfexMultiplier);
+      // Calculate payment for this row using individual multiplier if available
+      const individualMultiplier = individualMultipliers[`${rowIndex}-8`];
+      const payment = calculatePayment(row[1], row[4], srbnMultiplier, hfexMultiplier, individualMultiplier);
       summaries[date].paymentSum += payment;
     }
   });
@@ -202,7 +209,7 @@ const summarizeDataDetailed = (data: any[][], srbnMultiplier: number, hfexMultip
   const result: any[][] = [];
   let currentDate: string | null = null;
 
-  data.forEach(row => {
+  data.forEach((row, rowIndex) => {
     const date = row[2];
 
     // If the date changes or it's the last row, add a summary for the previous date
@@ -216,13 +223,17 @@ const summarizeDataDetailed = (data: any[][], srbnMultiplier: number, hfexMultip
         null,
         null,
         null,
+        null,
         `Fizetés teljes összege: ${Math.round(summaries[currentDate].paymentSum)}`
       ]);
     }
 
-    // Add the current row to the result with payment column
-    const payment = calculatePayment(row[1], row[4], srbnMultiplier, hfexMultiplier);
-    const rowWithPayment = [...row, null, payment];
+    // Add the current row to the result with payment column and multiplier column
+    const individualMultiplier = individualMultipliers[`${rowIndex}-8`];
+    const payment = calculatePayment(row[1], row[4], srbnMultiplier, hfexMultiplier, individualMultiplier);
+    const defaultMultiplier = row[1] && row[1].toString().toUpperCase().includes('SRBN') ? srbnMultiplier : 
+                             row[1] && row[1].toString().toUpperCase().includes('HF-EX') ? hfexMultiplier : 0;
+    const rowWithPayment = [...row, individualMultiplier || defaultMultiplier, payment];
     result.push(rowWithPayment);
 
     currentDate = date;
@@ -239,6 +250,7 @@ const summarizeDataDetailed = (data: any[][], srbnMultiplier: number, hfexMultip
       null,
       null,
       null,
+      null,
       `Fizetés teljes összege: ${Math.round(summaries[currentDate].paymentSum)}`
     ]);
   }
@@ -246,12 +258,12 @@ const summarizeDataDetailed = (data: any[][], srbnMultiplier: number, hfexMultip
   return result;
 };
 
-const summarizeDataByName = (data: any[][], srbnMultiplier: number, hfexMultiplier: number): any[][] => {
+const summarizeDataByName = (data: any[][], srbnMultiplier: number, hfexMultiplier: number, individualMultipliers: { [key: string]: number } = {}): any[][] => {
   if (!data || !Array.isArray(data) || data.length === 0) return [];
 
   // Group data by name (index 1)
   const summaries: { [name: string]: { index3Sum: number; index4Sum: number; paymentSum: number } } = {};
-  data.forEach(row => {
+  data.forEach((row, rowIndex) => {
     const name = row[1];
     if (name && typeof row[3] === 'number' && typeof row[4] === 'number') {
       if (!summaries[name]) {
@@ -260,8 +272,9 @@ const summarizeDataByName = (data: any[][], srbnMultiplier: number, hfexMultipli
       summaries[name].index3Sum += row[3];
       summaries[name].index4Sum += row[4];
       
-      // Calculate payment for this row
-      const payment = calculatePayment(row[1], row[4], srbnMultiplier, hfexMultiplier);
+      // Calculate payment for this row using individual multiplier if available
+      const individualMultiplier = individualMultipliers[`${rowIndex}-9`];
+      const payment = calculatePayment(row[1], row[4], srbnMultiplier, hfexMultiplier, individualMultiplier);
       summaries[name].paymentSum += payment;
     }
   });
@@ -270,7 +283,7 @@ const summarizeDataByName = (data: any[][], srbnMultiplier: number, hfexMultipli
   const result: any[][] = [];
   let currentName: string | null = null;
 
-  data.forEach(row => {
+  data.forEach((row, rowIndex) => {
     const name = row[1];
 
     // If the name changes or it's the last row, add a summary for the previous name
@@ -285,13 +298,17 @@ const summarizeDataByName = (data: any[][], srbnMultiplier: number, hfexMultipli
         null,
         null,
         null,
+        null,
         `Fizetés teljes összege: ${Math.round(summaries[currentName].paymentSum)}`
       ]);
     }
 
-    // Add the current row to the result with payment column
-    const payment = calculatePayment(row[1], row[4], srbnMultiplier, hfexMultiplier);
-    const rowWithPayment = [...row, payment];
+    // Add the current row to the result with payment column and multiplier column
+    const individualMultiplier = individualMultipliers[`${rowIndex}-9`];
+    const payment = calculatePayment(row[1], row[4], srbnMultiplier, hfexMultiplier, individualMultiplier);
+    const defaultMultiplier = row[1] && row[1].toString().toUpperCase().includes('SRBN') ? srbnMultiplier : 
+                             row[1] && row[1].toString().toUpperCase().includes('HF-EX') ? hfexMultiplier : 0;
+    const rowWithPayment = [...row, individualMultiplier || defaultMultiplier, payment];
     result.push(rowWithPayment);
 
     currentName = name;
@@ -309,6 +326,7 @@ const summarizeDataByName = (data: any[][], srbnMultiplier: number, hfexMultipli
       null,
       null,
       null,
+      null,
       `Fizetés teljes összege: ${Math.round(summaries[currentName].paymentSum)}`
     ]);
   }
@@ -316,12 +334,12 @@ const summarizeDataByName = (data: any[][], srbnMultiplier: number, hfexMultipli
   return result;
 };
 
-const summarizeDataDetailedByName = (data: any[][], srbnMultiplier: number, hfexMultiplier: number): any[][] => {
+const summarizeDataDetailedByName = (data: any[][], srbnMultiplier: number, hfexMultiplier: number, individualMultipliers: { [key: string]: number } = {}): any[][] => {
   if (!data || !Array.isArray(data) || data.length === 0) return [];
 
   // Group data by name (index 1), only sum index 4
   const summaries: { [name: string]: { index4Sum: number; paymentSum: number } } = {};
-  data.forEach(row => {
+  data.forEach((row, rowIndex) => {
     const name = row[1];
     if (name && typeof row[4] === 'number') {
       if (!summaries[name]) {
@@ -329,8 +347,9 @@ const summarizeDataDetailedByName = (data: any[][], srbnMultiplier: number, hfex
       }
       summaries[name].index4Sum += row[4];
       
-      // Calculate payment for this row
-      const payment = calculatePayment(row[1], row[4], srbnMultiplier, hfexMultiplier);
+      // Calculate payment for this row using individual multiplier if available
+      const individualMultiplier = individualMultipliers[`${rowIndex}-8`];
+      const payment = calculatePayment(row[1], row[4], srbnMultiplier, hfexMultiplier, individualMultiplier);
       summaries[name].paymentSum += payment;
     }
   });
@@ -339,7 +358,7 @@ const summarizeDataDetailedByName = (data: any[][], srbnMultiplier: number, hfex
   const result: any[][] = [];
   let currentName: string | null = null;
 
-  data.forEach(row => {
+  data.forEach((row, rowIndex) => {
     const name = row[1];
 
     // If the name changes or it's the last row, add a summary for the previous name
@@ -353,13 +372,17 @@ const summarizeDataDetailedByName = (data: any[][], srbnMultiplier: number, hfex
         null,
         null,
         null,
+        null,
         `Fizetés teljes összege: ${Math.round(summaries[currentName].paymentSum)}`
       ]);
     }
 
-    // Add the current row to the result with payment column
-    const payment = calculatePayment(row[1], row[4], srbnMultiplier, hfexMultiplier);
-    const rowWithPayment = [...row, null, payment];
+    // Add the current row to the result with payment column and multiplier column
+    const individualMultiplier = individualMultipliers[`${rowIndex}-8`];
+    const payment = calculatePayment(row[1], row[4], srbnMultiplier, hfexMultiplier, individualMultiplier);
+    const defaultMultiplier = row[1] && row[1].toString().toUpperCase().includes('SRBN') ? srbnMultiplier : 
+                             row[1] && row[1].toString().toUpperCase().includes('HF-EX') ? hfexMultiplier : 0;
+    const rowWithPayment = [...row, individualMultiplier || defaultMultiplier, payment];
     result.push(rowWithPayment);
 
     currentName = name;
@@ -376,6 +399,7 @@ const summarizeDataDetailedByName = (data: any[][], srbnMultiplier: number, hfex
       null,
       null,
       null,
+      null,
       `Fizetés teljes összege: ${Math.round(summaries[currentName].paymentSum)}`
     ]);
   }
@@ -384,17 +408,24 @@ const summarizeDataDetailedByName = (data: any[][], srbnMultiplier: number, hfex
 };
 
 // Function to calculate payment based on name suffix and Pont 2
-const calculatePayment = (name: string, pont2: number, srbnMultiplier: number, hfexMultiplier: number): number => {
+const calculatePayment = (name: string, pont2: number, srbnMultiplier: number, hfexMultiplier: number, individualMultiplier?: number): number => {
   if (!name || typeof pont2 !== 'number') return 0;
   
-  const nameStr = name.toString().toUpperCase();
+  let multiplier = 0;
   
-  let payment = 0;
-  if (nameStr.includes('SRBN')) {
-    payment = pont2 * srbnMultiplier;
-  } else if (nameStr.includes('HF-EX')) {
-    payment = pont2 * hfexMultiplier;
+  // Use individual multiplier if provided, otherwise use global multipliers
+  if (individualMultiplier !== undefined && individualMultiplier !== null) {
+    multiplier = individualMultiplier;
+  } else {
+    const nameStr = name.toString().toUpperCase();
+    if (nameStr.includes('SRBN')) {
+      multiplier = srbnMultiplier;
+    } else if (nameStr.includes('HF-EX')) {
+      multiplier = hfexMultiplier;
+    }
   }
+  
+  const payment = pont2 * multiplier;
   
   // Round to 0 decimals (round 0.5 and above up)
   const decimalPart = payment % 1;
@@ -426,6 +457,9 @@ export default function Home() {
   const [srbnMultiplier, setSrbnMultiplier] = useState<number>(2.9);
   const [hfexMultiplier, setHfexMultiplier] = useState<number>(3.1);
   const [notes, setNotes] = useState<{ [key: string]: string }>({});
+  const [multipliers, setMultipliers] = useState<{ [key: string]: number }>({});
+  const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set());
+  const [bulkMultiplier, setBulkMultiplier] = useState<number>(0);
 
   const processExcelFile = useCallback((file: File) => {
     setIsProcessing(true);
@@ -498,8 +532,7 @@ export default function Home() {
           aToIColumns = aToIColumns.slice(1);
 
           // aToIColumns = aToIColumns.filter((row: any[]) => row[0] !== `=== undefined - DAILY SUMMARY ===`);
-          aToIColumns = summarizeData(aToIColumns, srbnMultiplier, hfexMultiplier);
-          console.log(aToIColumns);
+          aToIColumns = summarizeData(aToIColumns, srbnMultiplier, hfexMultiplier, multipliers);
           setColumnsAtoI(aToIColumns);
           
           // Extract J-P columns (columns 9-15)
@@ -525,8 +558,7 @@ export default function Home() {
              return 0; // If dates are invalid, keep original order
            });
           
-          jToPColumns = summarizeDataDetailed(jToPColumns, srbnMultiplier, hfexMultiplier);
-          console.log(jToPColumns);
+          jToPColumns = summarizeDataDetailed(jToPColumns, srbnMultiplier, hfexMultiplier, multipliers);
           setColumnsJtoP(jToPColumns);
 
           let columnsByName = sheets[0].data.map((row: any[]) => row.slice(0, 9));
@@ -551,15 +583,14 @@ export default function Home() {
             const nameB = (b[1] ?? '').toString();
             return nameA.localeCompare(nameB);
           });
-          columnsByName = summarizeDataByName(columnsByName, srbnMultiplier, hfexMultiplier);
+          columnsByName = summarizeDataByName(columnsByName, srbnMultiplier, hfexMultiplier, multipliers);
 
           setColumnsByName(columnsByName);
 
           let columnsByNameDetailed = sheets[0].data.map((row: any[]) => row.slice(9, 16)).slice(1);
 
 
-          columnsByNameDetailed = summarizeDataDetailedByName(columnsByNameDetailed, srbnMultiplier, hfexMultiplier);
-          console.log(columnsByNameDetailed);
+          columnsByNameDetailed = summarizeDataDetailedByName(columnsByNameDetailed, srbnMultiplier, hfexMultiplier, multipliers);
           setColumnsByNameDetailed(columnsByNameDetailed);
 
           
@@ -632,6 +663,166 @@ export default function Home() {
     }));
   }, []);
 
+  const handleMultiplierChange = useCallback((rowKey: string, value: number) => {
+    setMultipliers(prev => ({
+      ...prev,
+      [rowKey]: value
+    }));
+  }, []);
+
+  const handleRowSelection = useCallback((rowKey: string, isSelected: boolean) => {
+    setSelectedRows(prev => {
+      const newSet = new Set(prev);
+      if (isSelected) {
+        newSet.add(rowKey);
+      } else {
+        newSet.delete(rowKey);
+      }
+      return newSet;
+    });
+  }, []);
+
+  const handleSelectAll = useCallback((isSelected: boolean, tableType: string) => {
+    if (isSelected) {
+      // Get all row keys for the current table
+      let data: any[][] = [];
+      let multiplierColumnIndex = 9; // Default for A-I tables
+      
+      switch (tableType) {
+        case 'A-I':
+          data = columnsAtoI.slice(1);
+          multiplierColumnIndex = 9;
+          break;
+        case 'J-P':
+          data = columnsJtoP;
+          multiplierColumnIndex = 8;
+          break;
+        case 'Név szerinti összegzés':
+          data = columnsByName;
+          multiplierColumnIndex = 9;
+          break;
+        case 'Név szerinti összegzés túlóra kimutatás':
+          data = columnsByNameDetailed;
+          multiplierColumnIndex = 8;
+          break;
+      }
+      
+      const allRowKeys = data
+        .filter((row: any[]) => row && row.some(cell => cell !== null && cell !== undefined && cell !== ''))
+        .filter((row: any[]) => !(row[0] && typeof row[0] === 'string' && row[0].includes('ÖSSZEGZÉS')))
+        .map((_, index) => `${index}-${multiplierColumnIndex}`);
+      
+      setSelectedRows(new Set(allRowKeys));
+    } else {
+      setSelectedRows(new Set());
+    }
+  }, [columnsAtoI, columnsJtoP, columnsByName, columnsByNameDetailed]);
+
+  const handleBulkMultiplierChange = useCallback(() => {
+    if (selectedRows.size === 0 || !bulkMultiplier) return;
+    
+    const updates: { [key: string]: number } = {};
+    selectedRows.forEach(rowKey => {
+      updates[rowKey] = bulkMultiplier;
+    });
+    
+    setMultipliers(prev => ({
+      ...prev,
+      ...updates
+    }));
+    
+    // Clear selection after bulk update
+    setSelectedRows(new Set());
+    setBulkMultiplier(0);
+  }, [selectedRows, bulkMultiplier]);
+
+  const recalculatePayments = useCallback(() => {
+    if (extractedData.length > 0 && extractedData[0].data.length > 0) {
+      // Recalculate A-I columns
+      let aToIColumns = extractedData[0].data.map((row: any[]) => row.slice(0, 9));
+      aToIColumns = aToIColumns.filter((row: any[]) => row.some((cell: any) => cell !== undefined));
+      aToIColumns = aToIColumns.filter((row: any[]) => row.length > 0);
+      aToIColumns = aToIColumns.filter((row: any[]) => row && row.length > 0 && row.some((cell: any) => cell !== null && cell !== undefined));
+      // Additional filter to remove rows with only null/empty values
+      aToIColumns = aToIColumns.filter((row: any[]) => {
+        const meaningfulCells = row.filter((cell: any) => 
+          cell !== null && cell !== undefined && cell !== '' && cell !== 0
+        );
+        return meaningfulCells.length > 0;
+      });
+
+      aToIColumns = aToIColumns.sort((a: any[], b: any[]) => {
+        const dateAStr = a[2];
+        const dateBStr = b[2];
+        
+        if (dateAStr && dateBStr && typeof dateAStr === 'string' && typeof dateBStr === 'string') {
+          const [yearA, monthA, dayA] = dateAStr.split('.').map(Number);
+          const [yearB, monthB, dayB] = dateBStr.split('.').map(Number);
+          
+          const dateA = new Date(yearA, monthA - 1, dayA);
+          const dateB = new Date(yearB, monthB - 1, dayB);
+          
+          return dateA.getTime() - dateB.getTime();
+        }
+        
+        return 0;
+      });
+
+      aToIColumns = summarizeData(aToIColumns, srbnMultiplier, hfexMultiplier, multipliers);
+      setColumnsAtoI(aToIColumns);
+
+      // Recalculate J-P columns
+      let jToPColumns = extractedData[0].data.map((row: any[]) => row.slice(9, 16)).slice(1);
+      jToPColumns = jToPColumns.filter((row: any[]) => row && row.length > 0 && row.some((cell: any) => cell !== null && cell !== undefined));
+      jToPColumns = jToPColumns.sort((a: any[], b: any[]) => {
+        const dateAStr = a[2];
+        const dateBStr = b[2];
+        
+        if (dateAStr && dateBStr && typeof dateAStr === 'string' && typeof dateBStr === 'string') {
+          const [yearA, monthA, dayA] = dateAStr.split('.').map(Number);
+          const [yearB, monthB, dayB] = dateBStr.split('.').map(Number);
+          
+          const dateA = new Date(yearA, monthA - 1, dayA);
+          const dateB = new Date(yearB, monthB - 1, dayB);
+          
+          return dateA.getTime() - dateB.getTime();
+        }
+        
+        return 0;
+      });
+      jToPColumns = summarizeDataDetailed(jToPColumns, srbnMultiplier, hfexMultiplier, multipliers);
+      setColumnsJtoP(jToPColumns);
+
+      // Recalculate name-based columns
+      let columnsByName = extractedData[0].data.map((row: any[]) => row.slice(0, 9));
+      
+      // Remove the empty arrays from columnsByName
+      columnsByName = columnsByName
+        .filter((row: any[]) => row.length > 0)
+        .filter((row: any[]) => row.some((cell: any) => cell !== null && cell !== undefined && cell !== ''))
+        .filter((row: any[]) => {
+          // Check if the row has meaningful data (not just nulls and empty values)
+          const meaningfulCells = row.filter((cell: any) => 
+            cell !== null && cell !== undefined && cell !== '' && cell !== 0
+          );
+          return meaningfulCells.length > 0;
+        });
+      
+      columnsByName.sort((a: any[], b: any[]) => {
+        const nameA = (a[1] ?? '').toString();
+        const nameB = (b[1] ?? '').toString();
+        return nameA.localeCompare(nameB);
+      });
+      columnsByName = summarizeDataByName(columnsByName, srbnMultiplier, hfexMultiplier, multipliers);
+      setColumnsByName(columnsByName);
+
+      // Recalculate name-based detailed columns
+      let columnsByNameDetailed = extractedData[0].data.map((row: any[]) => row.slice(9, 16)).slice(1);
+      columnsByNameDetailed = summarizeDataDetailedByName(columnsByNameDetailed, srbnMultiplier, hfexMultiplier, multipliers);
+      setColumnsByNameDetailed(columnsByNameDetailed);
+    }
+  }, [extractedData, srbnMultiplier, hfexMultiplier, multipliers]);
+
   // Recalculate data when multipliers change
   useEffect(() => {
     if (extractedData.length > 0 && extractedData[0].data.length > 0) {
@@ -665,7 +856,7 @@ export default function Home() {
         return 0;
       });
 
-      aToIColumns = summarizeData(aToIColumns, srbnMultiplier, hfexMultiplier);
+      aToIColumns = summarizeData(aToIColumns, srbnMultiplier, hfexMultiplier, multipliers);
       setColumnsAtoI(aToIColumns);
 
       // Recalculate J-P columns
@@ -687,7 +878,7 @@ export default function Home() {
         
         return 0;
       });
-      jToPColumns = summarizeDataDetailed(jToPColumns, srbnMultiplier, hfexMultiplier);
+      jToPColumns = summarizeDataDetailed(jToPColumns, srbnMultiplier, hfexMultiplier, multipliers);
       setColumnsJtoP(jToPColumns);
 
       // Recalculate name-based columns
@@ -710,15 +901,15 @@ export default function Home() {
         const nameB = (b[1] ?? '').toString();
         return nameA.localeCompare(nameB);
       });
-      columnsByName = summarizeDataByName(columnsByName, srbnMultiplier, hfexMultiplier);
+      columnsByName = summarizeDataByName(columnsByName, srbnMultiplier, hfexMultiplier, multipliers);
       setColumnsByName(columnsByName);
 
       // Recalculate name-based detailed columns
       let columnsByNameDetailed = extractedData[0].data.map((row: any[]) => row.slice(9, 16)).slice(1);
-      columnsByNameDetailed = summarizeDataDetailedByName(columnsByNameDetailed, srbnMultiplier, hfexMultiplier);
+      columnsByNameDetailed = summarizeDataDetailedByName(columnsByNameDetailed, srbnMultiplier, hfexMultiplier, multipliers);
       setColumnsByNameDetailed(columnsByNameDetailed);
     }
-  }, [srbnMultiplier, hfexMultiplier, extractedData]);
+  }, [srbnMultiplier, hfexMultiplier, multipliers, extractedData]);
 
   const clearData = useCallback(() => {
     setExtractedData([]);
@@ -732,6 +923,9 @@ export default function Home() {
     setSrbnMultiplier(2);
     setHfexMultiplier(3);
     setNotes({});
+    setMultipliers({});
+    setSelectedRows(new Set());
+    setBulkMultiplier(0);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
@@ -742,11 +936,11 @@ export default function Home() {
     
     const headers = [
       'Szedőkód', 'Szedő neve', 'Dátum', 'PDA Pont', 'Pont 2',
-      'Műszak kezdete', 'Műszak vége', 'Összesített óra', 'Megjegyzés', 'Fizetés'
+      'Műszak kezdete', 'Műszak vége', 'Összesített óra', 'Megjegyzés', 'Szorzó', 'Fizetés'
     ];
     const headersDetailed = [
       'Szedőkód', 'Szedő neve', 'Dátum', 'Túlóra', 'Elszámolandó pont',
-      'Műszak kezdet', 'Műszak vége', 'Megjegyzés'
+      'Műszak kezdet', 'Műszak vége', 'Megjegyzés', 'Szorzó', 'Fizetés'
     ];
 
     let table: any[][];
@@ -762,14 +956,30 @@ export default function Home() {
       table = columnsByNameDetailed.slice(1);
     }
 
-    // Helper to add notes to rows
-    const addNotesToRows = (rows: any[][], startIndex: number = 0) => {
+    // Helper to add notes and multipliers to rows
+    const addNotesToRows = (rows: any[][], startIndex: number = 0, isDetailed: boolean = false) => {
       return rows.map((row, idx) => {
         const rowWithNotes = [...row];
-        // Add notes to the 8th column (Megjegyzés)
-        if (rowWithNotes.length >= 8) {
-          const noteKey = `${startIndex + idx}-8`;
-          rowWithNotes[8] = notes[noteKey] || rowWithNotes[8] || '';
+        if (isDetailed) {
+          // For detailed tables: notes at index 7, multipliers at index 8
+          if (rowWithNotes.length >= 7) {
+            const noteKey = `${startIndex + idx}-7`;
+            rowWithNotes[7] = notes[noteKey] || rowWithNotes[7] || '';
+          }
+          if (rowWithNotes.length >= 8) {
+            const multiplierKey = `${startIndex + idx}-8`;
+            rowWithNotes[8] = multipliers[multiplierKey] || rowWithNotes[8] || '';
+          }
+        } else {
+          // For standard tables: notes at index 8, multipliers at index 9
+          if (rowWithNotes.length >= 8) {
+            const noteKey = `${startIndex + idx}-8`;
+            rowWithNotes[8] = notes[noteKey] || rowWithNotes[8] || '';
+          }
+          if (rowWithNotes.length >= 9) {
+            const multiplierKey = `${startIndex + idx}-9`;
+            rowWithNotes[9] = multipliers[multiplierKey] || rowWithNotes[9] || '';
+          }
         }
         return rowWithNotes;
       });
@@ -860,10 +1070,11 @@ export default function Home() {
         const dataRows = rows.filter(row => !(row[0] && typeof row[0] === 'string' && row[0].includes('ÖSSZEGZÉS')));
         
         // Add notes to data rows
-        const dataRowsWithNotes = addNotesToRows(dataRows);
-        const summaryRowsWithNotes = addNotesToRows(summaryRows, dataRows.length);
+        const isDetailed = type === 'J-P';
+        const dataRowsWithNotes = addNotesToRows(dataRows, 0, isDetailed);
+        const summaryRowsWithNotes = addNotesToRows(summaryRows, dataRows.length, isDetailed);
         
-        addSheet(date, headers, [...dataRowsWithNotes, ...summaryRowsWithNotes]);
+        addSheet(date, isDetailed ? headersDetailed : headers, [...dataRowsWithNotes, ...summaryRowsWithNotes]);
       });
     } else if (type === 'Név szerinti összegzés' || type === 'Név szerinti összegzés túlóra kimutatás') {
       // Group by name (index 1)
@@ -880,10 +1091,11 @@ export default function Home() {
         const dataRows = rows.filter(row => !(row[0] && typeof row[0] === 'string' && row[0].includes('ÖSSZEGZÉS')));
         
         // Add notes to data rows
-        const dataRowsWithNotes = addNotesToRows(dataRows);
-        const summaryRowsWithNotes = addNotesToRows(summaryRows, dataRows.length);
+        const isDetailed = type === 'Név szerinti összegzés túlóra kimutatás';
+        const dataRowsWithNotes = addNotesToRows(dataRows, 0, isDetailed);
+        const summaryRowsWithNotes = addNotesToRows(summaryRows, dataRows.length, isDetailed);
         
-        addSheet(name, headers, [...dataRowsWithNotes, ...summaryRowsWithNotes]);
+        addSheet(name, isDetailed ? headersDetailed : headers, [...dataRowsWithNotes, ...summaryRowsWithNotes]);
       });
     }
 
@@ -1088,13 +1300,60 @@ export default function Home() {
                   {extractedData.map((sheet, sheetIndex) => (
                     <div key={sheetIndex} className="space-y-8">
                       <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                        <button 
-                        onClick={() => downloadTable(activeTable)}
-                        className="px-6 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white font-medium rounded-lg transition-colors duration-200"
-                        >
-                          {activeTable === 'A-I' ? 'Szimpla összegzés' : activeTable === 'J-P' ? 'Túlóra kimutatás alapú összegzés' : activeTable === 'Név szerinti összegzés' ? 'Név szerinti összegzés' : 'Név szerinti összegzés túlóra kimutatás'} letöltése
-                        </button>
+                        <div className="flex gap-3">
+                          <button 
+                          onClick={() => downloadTable(activeTable)}
+                          className="px-6 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white font-medium rounded-lg transition-colors duration-200"
+                          >
+                            {activeTable === 'A-I' ? 'Szimpla összegzés' : activeTable === 'J-P' ? 'Túlóra kimutatás alapú összegzés' : activeTable === 'Név szerinti összegzés' ? 'Név szerinti összegzés' : 'Név szerinti összegzés túlóra kimutatás'} letöltése
+                          </button>
+                          <button 
+                          onClick={recalculatePayments}
+                          className="px-6 py-3 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white font-medium rounded-lg transition-colors duration-200"
+                          title="Fizetések újraszámítása a jelenlegi szorzók alapján"
+                          >
+                            🔄 Fizetés újraszámítása
+                          </button>
+                        </div>
                       </h3>
+
+                      {/* Bulk Edit Interface */}
+                      {selectedRows.size > 0 && (
+                        <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg p-4 mb-4">
+                          <div className="flex items-center gap-4">
+                            <span className="text-blue-800 dark:text-blue-200 font-medium">
+                              {selectedRows.size} sor kiválasztva
+                            </span>
+                            <div className="flex items-center gap-2">
+                              <label htmlFor="bulkMultiplier" className="text-sm font-medium text-blue-700 dark:text-blue-300">
+                                Új szorzó:
+                              </label>
+                              <input
+                                id="bulkMultiplier"
+                                type="number"
+                                step="0.1"
+                                value={bulkMultiplier || ''}
+                                onChange={(e) => setBulkMultiplier(Number(e.target.value))}
+                                placeholder="Szorzó érték"
+                                className="w-24 px-2 py-1 text-sm border border-blue-300 dark:border-blue-600 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+                              />
+                              <button
+                                onClick={handleBulkMultiplierChange}
+                                disabled={!bulkMultiplier}
+                                className="px-4 py-1 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white text-sm font-medium rounded transition-colors duration-200"
+                              >
+                                Alkalmaz
+                              </button>
+                              <button
+                                onClick={() => setSelectedRows(new Set())}
+                                className="px-4 py-1 bg-gray-600 hover:bg-gray-700 text-white text-sm font-medium rounded transition-colors duration-200"
+                              >
+                                Kijelölés törlése
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      )}
                       
                       {/* A-I Table */}
                       {activeTable === 'A-I' && columnsAtoI.length > 0 && (
@@ -1106,6 +1365,13 @@ export default function Home() {
                             <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
                               <thead className="bg-gray-50 dark:bg-gray-700">
                                 <tr>
+                                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                    <input
+                                      type="checkbox"
+                                      onChange={(e) => handleSelectAll(e.target.checked, 'A-I')}
+                                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                    />
+                                  </th>
                                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                                     Szedőkód
                                   </th>
@@ -1134,6 +1400,9 @@ export default function Home() {
                                     Megjegyzés
                                   </th>
                                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                    Szorzó
+                                  </th>
+                                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                                     Fizetés
                                   </th>
                                 </tr>
@@ -1160,6 +1429,16 @@ export default function Home() {
                                           : 'hover:bg-gray-50 dark:hover:bg-gray-700'
                                       }`}
                                     >
+                                      <td className="px-6 py-4 whitespace-nowrap text-sm">
+                                        {!isSummaryRow && (
+                                          <input
+                                            type="checkbox"
+                                            checked={selectedRows.has(`${rowIndex}-9`)}
+                                            onChange={(e) => handleRowSelection(`${rowIndex}-9`, e.target.checked)}
+                                            className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                          />
+                                        )}
+                                      </td>
                                       {row.map((cell: any, cellIndex: number) => (
                                         <td
                                           key={cellIndex}
@@ -1177,8 +1456,17 @@ export default function Home() {
                                               placeholder="Megjegyzés..."
                                               className="w-full min-w-[120px] px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
                                             />
-                                          )  : cellIndex === 6 || cellIndex === 5 ? formatHungarianDate(cell) : cellIndex === 3 || cellIndex === 4 || cellIndex === 9 ? formatDecimal(cell) : cellIndex === 7 ? formatTime(cell) : cell || ''}
-                                          {cellIndex === 9 ? ' Ft' : ''}
+                                          ) : cellIndex === 9 ? (
+                                            <input
+                                              type="number"
+                                              step="0.1"
+                                              value={multipliers[`${rowIndex}-${cellIndex}`] || cell || ''}
+                                              onChange={(e) => handleMultiplierChange(`${rowIndex}-${cellIndex}`, Number(e.target.value))}
+                                              placeholder="Szorzó"
+                                              className="w-full min-w-[80px] px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+                                            />
+                                          ) : cellIndex === 6 || cellIndex === 5 ? formatHungarianDate(cell) : cellIndex === 3 || cellIndex === 4 || cellIndex === 10 ? formatDecimal(cell) : cellIndex === 7 ? formatTime(cell) : cell || ''}
+                                          {cellIndex === 10 ? ' Ft' : ''}
                                         </td>
                                       ))}
                                     </tr>
@@ -1200,6 +1488,13 @@ export default function Home() {
                             <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
                               <thead className="bg-gray-50 dark:bg-gray-700">
                                 <tr>
+                                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                    <input
+                                      type="checkbox"
+                                      onChange={(e) => handleSelectAll(e.target.checked, 'J-P')}
+                                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                    />
+                                  </th>
                                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                                     Szedőkód
                                   </th>
@@ -1223,6 +1518,9 @@ export default function Home() {
                                   </th>
                                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                                     Megjegyzés
+                                  </th>
+                                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                    Szorzó
                                   </th>
                                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                                     Fizetés
@@ -1250,6 +1548,16 @@ export default function Home() {
                                           : 'hover:bg-gray-50 dark:hover:bg-gray-700'
                                       }`}
                                     >
+                                      <td className="px-6 py-4 whitespace-nowrap text-sm">
+                                        {!isSummaryRow && (
+                                          <input
+                                            type="checkbox"
+                                            checked={selectedRows.has(`${rowIndex}-8`)}
+                                            onChange={(e) => handleRowSelection(`${rowIndex}-8`, e.target.checked)}
+                                            className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                          />
+                                        )}
+                                      </td>
                                       {row.map((cell: any, cellIndex: number) => (
                                         <td
                                           key={cellIndex}
@@ -1267,8 +1575,17 @@ export default function Home() {
                                               placeholder="Megjegyzés..."
                                               className="w-full min-w-[120px] px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
                                             />
-                                          ) : cellIndex === 8 ? formatDecimal(cell) : cellIndex === 3 || cellIndex === 4 ? formatDecimal(cell) : cellIndex === 5 || cellIndex === 6 ? formatHungarianDate(cell, true) : cell || ''}
-                                          {cellIndex === 8 ? ' Ft' : ''}
+                                          ) : cellIndex === 8 ? (
+                                            <input
+                                              type="number"
+                                              step="0.1"
+                                              value={multipliers[`${rowIndex}-${cellIndex}`] || cell || ''}
+                                              onChange={(e) => handleMultiplierChange(`${rowIndex}-${cellIndex}`, Number(e.target.value))}
+                                              placeholder="Szorzó"
+                                              className="w-full min-w-[80px] px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+                                            />
+                                          ) : cellIndex === 9 ? formatDecimal(cell) : cellIndex === 3 || cellIndex === 4 ? formatDecimal(cell) : cellIndex === 5 || cellIndex === 6 ? formatHungarianDate(cell, true) : cell || ''}
+                                          {cellIndex === 9 ? ' Ft' : ''}
                                           </td>
                                       ))}
                                     </tr>
@@ -1298,6 +1615,13 @@ export default function Home() {
                                     </th>
                                   ))} */}
                                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                    <input
+                                      type="checkbox"
+                                      onChange={(e) => handleSelectAll(e.target.checked, 'Név szerinti összegzés')}
+                                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                    />
+                                  </th>
+                                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                                     Szedőkód
                                   </th>
                                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
@@ -1325,6 +1649,9 @@ export default function Home() {
                                     Megjegyzés
                                   </th>
                                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                    Szorzó
+                                  </th>
+                                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                                     Fizetés
                                   </th>
                                 </tr>
@@ -1350,6 +1677,16 @@ export default function Home() {
                                           : 'hover:bg-gray-50 dark:hover:bg-gray-700'
                                       }`}
                                     >
+                                      <td className="px-6 py-4 whitespace-nowrap text-sm">
+                                        {!isSummaryRow && (
+                                          <input
+                                            type="checkbox"
+                                            checked={selectedRows.has(`${rowIndex}-9`)}
+                                            onChange={(e) => handleRowSelection(`${rowIndex}-9`, e.target.checked)}
+                                            className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                          />
+                                        )}
+                                      </td>
                                       {row.map((cell: any, cellIndex: number) => (
                                         <td
                                           key={cellIndex}
@@ -1367,8 +1704,17 @@ export default function Home() {
                                               placeholder="Megjegyzés..."
                                               className="w-full min-w-[120px] px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
                                             />
-                                          )  : cellIndex === 6 || cellIndex === 5 ? formatHungarianDate(cell) : cellIndex === 3 || cellIndex === 4 || cellIndex === 9 ? formatDecimal(cell) : cellIndex === 7 ? formatTime(cell) : cell || ''}
-                                            {cellIndex === 9 ? ' Ft' : ''}
+                                          ) : cellIndex === 9 ? (
+                                            <input
+                                              type="number"
+                                              step="0.1"
+                                              value={multipliers[`${rowIndex}-${cellIndex}`] || cell || ''}
+                                              onChange={(e) => handleMultiplierChange(`${rowIndex}-${cellIndex}`, Number(e.target.value))}
+                                              placeholder="Szorzó"
+                                              className="w-full min-w-[80px] px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+                                            />
+                                          ) : cellIndex === 6 || cellIndex === 5 ? formatHungarianDate(cell) : cellIndex === 3 || cellIndex === 4 || cellIndex === 10 ? formatDecimal(cell) : cellIndex === 7 ? formatTime(cell) : cell || ''}
+                                            {cellIndex === 10 ? ' Ft' : ''}
                                           </td>
                                       ))}
                                     </tr>
@@ -1389,6 +1735,13 @@ export default function Home() {
                             <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
                               <thead className="bg-gray-50 dark:bg-gray-700">
                                 <tr>
+                                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                    <input
+                                      type="checkbox"
+                                      onChange={(e) => handleSelectAll(e.target.checked, 'Név szerinti összegzés túlóra kimutatás')}
+                                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                    />
+                                  </th>
                                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                                     Szedőkód
                                   </th>
@@ -1412,6 +1765,9 @@ export default function Home() {
                                   </th>
                                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                                     Megjegyzés
+                                  </th>
+                                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                    Szorzó
                                   </th>
                                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                                     Fizetés
@@ -1439,6 +1795,16 @@ export default function Home() {
                                           : 'hover:bg-gray-50 dark:hover:bg-gray-700'
                                       }`}
                                     >
+                                      <td className="px-6 py-4 whitespace-nowrap text-sm">
+                                        {!isSummaryRow && (
+                                          <input
+                                            type="checkbox"
+                                            checked={selectedRows.has(`${rowIndex}-8`)}
+                                            onChange={(e) => handleRowSelection(`${rowIndex}-8`, e.target.checked)}
+                                            className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                          />
+                                        )}
+                                      </td>
                                       {row.map((cell: any, cellIndex: number) => (
                                         <td
                                           key={cellIndex}
@@ -1456,8 +1822,17 @@ export default function Home() {
                                               placeholder="Megjegyzés..."
                                               className="w-full min-w-[120px] px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
                                             />
-                                          ) : cellIndex === 7 ? formatDecimal(cell) : cellIndex === 3 || cellIndex === 4 ? formatDecimal(cell) : cellIndex === 5 || cellIndex === 6 ? formatHungarianDate(cell, true) : cell || ''}
-                                          {cellIndex === 8 ? ' Ft' : ''}
+                                          ) : cellIndex === 8 ? (
+                                            <input
+                                              type="number"
+                                              step="0.1"
+                                              value={multipliers[`${rowIndex}-${cellIndex}`] || cell || ''}
+                                              onChange={(e) => handleMultiplierChange(`${rowIndex}-${cellIndex}`, Number(e.target.value))}
+                                              placeholder="Szorzó"
+                                              className="w-full min-w-[80px] px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+                                            />
+                                          ) : cellIndex === 9 ? formatDecimal(cell) : cellIndex === 3 || cellIndex === 4 ? formatDecimal(cell) : cellIndex === 5 || cellIndex === 6 ? formatHungarianDate(cell, true) : cell || ''}
+                                          {cellIndex === 9 ? ' Ft' : ''}
                                           </td>
                                       ))}
                                     </tr>
