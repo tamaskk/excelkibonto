@@ -42,7 +42,7 @@ const formatDecimal = (value: any): any => {
   return value;
 };
 
-const formatHungarianDate = (dateValue: any, showDateAndTime: boolean = false): string => {
+const formatHungarianDate = (dateValue: any, showDateAndTime: boolean = false, showTime: boolean = false): string => {
   if (!dateValue) return '';
   
   try {
@@ -67,8 +67,7 @@ const formatHungarianDate = (dateValue: any, showDateAndTime: boolean = false): 
     if (isNaN(date.getTime())) return dateValue;
 
     // Optional timezone adjustment
-    date.setHours(date.getHours() - 2);
-    date.setDate(date.getDate() + 2);
+    date.setDate(date.getDate());
 
     // Hungarian weekday names
     const weekdayNames = ['Vasárnap', 'Hétfő', 'Kedd', 'Szerda', 'Csütörtök', 'Péntek', 'Szombat'];
@@ -79,8 +78,59 @@ const formatHungarianDate = (dateValue: any, showDateAndTime: boolean = false): 
     const day = `${date.getDate()}`.padStart(2, '0');
 
     const dateString = `${year}.${month}.${day}. ${weekday}`;
+    const hours = `${date.getHours()}`.padStart(2, '0');
+    const minutes = `${date.getMinutes()}`.padStart(2, '0');
+    const seconds = `${date.getSeconds()}`.padStart(2, '0');
 
+    const timeString = `${hours}:${minutes}:${seconds}`;
+
+    if (showTime) return timeString;
     if (!showDateAndTime) return dateString;
+
+
+    return `${dateString} ${hours}:${minutes}:${seconds}`;
+  } catch (error) {
+    return dateValue;
+  }
+};
+
+const formatHungarianDateTime = (dateValue: any): string => {
+  if (!dateValue) return '';
+  
+  try {
+    let date: Date;
+
+    // Handle Excel serial date numbers
+    if (typeof dateValue === 'number' && dateValue > 1) {
+      date = excelSerialToDate(dateValue);
+    } else if (typeof dateValue === 'string' && dateValue.includes('.')) {
+      const parts = dateValue.split(' ');
+      const datePart = parts[0];
+      const timePart = parts[1] || '';
+      
+      const [year, month, day] = datePart.split('.').map(Number);
+      const [hours = 0, minutes = 0, seconds = 0] = timePart.split(':').map(Number);
+      
+      date = new Date(year, month - 1, day, hours, minutes, seconds);
+    } else {
+      date = new Date(dateValue);
+    }
+
+    if (isNaN(date.getTime())) return dateValue;
+
+    // Timezone adjustment for time columns - add 2 days back
+    date.setDate(date.getDate() + 2);
+    date.setHours(date.getHours() - 2);
+
+    // Hungarian weekday names
+    const weekdayNames = ['Vasárnap', 'Hétfő', 'Kedd', 'Szerda', 'Csütörtök', 'Péntek', 'Szombat'];
+    const weekday = weekdayNames[date.getDay()];
+
+    const year = date.getFullYear();
+    const month = `${date.getMonth() + 1}`.padStart(2, '0');
+    const day = `${date.getDate()}`.padStart(2, '0');
+
+    const dateString = `${year}.${month}.${day}. ${weekday}`;
 
     const hours = `${date.getHours()}`.padStart(2, '0');
     const minutes = `${date.getMinutes()}`.padStart(2, '0');
@@ -1495,7 +1545,7 @@ export default function Home() {
                                               <span className={isWeekend ? 'text-red-600 dark:text-red-400 font-medium' : ''}>
                                                 {formattedDate}
                                               </span>
-                                            ) : cellIndex === 6 || cellIndex === 5 ? formatHungarianDate(cell) : cellIndex === 3 || cellIndex === 4 || cellIndex === 10 ? formatDecimal(cell) : cellIndex === 7 ? formatTime(cell) : cell || ''}
+                                            ) : cellIndex === 6 || cellIndex === 5 ? formatHungarianDate(cell, true) : cellIndex === 3 || cellIndex === 4 || cellIndex === 10 ? formatDecimal(cell) : cellIndex === 7 ? formatTime(cell) : cell || ''}
                                             {cellIndex === 10 ? ' Ft' : ''}
                                           </td>
                                         );
@@ -1767,7 +1817,7 @@ export default function Home() {
                                               <span className={isWeekend ? 'text-red-600 dark:text-red-400 font-medium' : ''}>
                                                 {formattedDate}
                                               </span>
-                                            ) : cellIndex === 6 || cellIndex === 5 ? formatHungarianDate(cell) : cellIndex === 3 || cellIndex === 4 || cellIndex === 10 ? formatDecimal(cell) : cellIndex === 7 ? formatTime(cell) : cell || ''}
+                                            ) : cellIndex === 6 || cellIndex === 5 ? formatHungarianDate(cell, true, true) : cellIndex === 3 || cellIndex === 4 || cellIndex === 10 ? formatDecimal(cell) : cellIndex === 7 ? formatTime(cell) : cell || ''}
                                             {cellIndex === 10 ? ' Ft' : ''}
                                           </td>
                                         );
