@@ -47,64 +47,69 @@ const formatHungarianDate = (dateValue: any, showDateAndTime: boolean = false): 
   
   try {
     let date: Date;
-    
+
     // Handle Excel serial date numbers
     if (typeof dateValue === 'number' && dateValue > 1) {
       date = excelSerialToDate(dateValue);
     } else if (typeof dateValue === 'string' && dateValue.includes('.')) {
-      // Parse format like "2025.06.19 7:57:20"
       const parts = dateValue.split(' ');
-      const datePart = parts[0]; // "2025.06.19"
-      const timePart = parts[1] || ''; // "7:57:20"
+      const datePart = parts[0];
+      const timePart = parts[1] || '';
       
       const [year, month, day] = datePart.split('.').map(Number);
       const [hours = 0, minutes = 0, seconds = 0] = timePart.split(':').map(Number);
       
-      // Create date (month is 0-indexed in JavaScript Date)
       date = new Date(year, month - 1, day, hours, minutes, seconds);
     } else {
-      // Try standard date parsing for other formats
       date = new Date(dateValue);
     }
-    
-    if (isNaN(date.getTime())) {
-      return dateValue; // Return original if not a valid date
-    }
-    
-    // Subtract 2 hours for timezone adjustment
-    date.setHours(date.getHours() - 2);
 
-    // Add 2 extra days to the display to compensate for timezones
+    if (isNaN(date.getTime())) return dateValue;
+
+    // Optional timezone adjustment
+    date.setHours(date.getHours() - 2);
     date.setDate(date.getDate() + 2);
-    
-    const options: Intl.DateTimeFormatOptions = {
-      ...(showDateAndTime && {
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit'
-      }),
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-      hour12: false
-    };
-    
-    const formatted = date.toLocaleString('hu-HU', options);
-    
-    // For date and time, replace comma with dot to match Hungarian format
-    if (showDateAndTime) {
-      return formatted.replace(',', '.');
-    }
-    
-    return formatted;
+
+    // Hungarian weekday names
+    const weekdayNames = ['Vasárnap', 'Hétfő', 'Kedd', 'Szerda', 'Csütörtök', 'Péntek', 'Szombat'];
+    const weekday = weekdayNames[date.getDay()];
+
+    const year = date.getFullYear();
+    const month = `${date.getMonth() + 1}`.padStart(2, '0');
+    const day = `${date.getDate()}`.padStart(2, '0');
+
+    const dateString = `${year}.${month}.${day}. ${weekday}`;
+
+    if (!showDateAndTime) return dateString;
+
+    const hours = `${date.getHours()}`.padStart(2, '0');
+    const minutes = `${date.getMinutes()}`.padStart(2, '0');
+    const seconds = `${date.getSeconds()}`.padStart(2, '0');
+
+    return `${dateString} ${hours}:${minutes}:${seconds}`;
   } catch (error) {
-    return dateValue; // Return original if formatting fails
+    return dateValue;
   }
 };
+
 
 const formatTime = (time: number): number => {
   // Time i receive like 5.545454 and i want to show 5 so always round down
   return Math.floor(time);
+};
+
+// Function to generate unique row key based on row content
+const generateRowKey = (row: any[], tableType: string): string => {
+  if (!row || row.length === 0) return '';
+  
+  // Create a unique key based on the row content that won't change with filtering/sorting
+  const name = row[1] || '';
+  const date = row[2] || '';
+  const firstValue = row[3] || '';
+  const secondValue = row[4] || '';
+  
+  // Include table type to avoid conflicts between tables
+  return `${tableType}-${name}-${date}-${firstValue}-${secondValue}`;
 };
 
 const summarizeData = (data: any[][], srbnMultiplier: number, hfexMultiplier: number, individualMultipliers: { [key: string]: number } = {}): any[][] => {
@@ -122,7 +127,8 @@ const summarizeData = (data: any[][], srbnMultiplier: number, hfexMultiplier: nu
       summaries[date].index4Sum += row[4];
       
       // Calculate payment for this row using individual multiplier if available
-      const individualMultiplier = individualMultipliers[`${rowIndex}-9`];
+      const rowKey = generateRowKey(row, 'A-I');
+      const individualMultiplier = individualMultipliers[rowKey];
       const payment = calculatePayment(row[1], row[4], srbnMultiplier, hfexMultiplier, individualMultiplier);
       summaries[date].paymentSum += payment;
     }
@@ -154,10 +160,11 @@ const summarizeData = (data: any[][], srbnMultiplier: number, hfexMultiplier: nu
     }
     
     // Add the current row to the result with payment column and multiplier column
-    const individualMultiplier = individualMultipliers[`${rowIndex}-9`];
+    const rowKey = generateRowKey(row, 'A-I');
+    const individualMultiplier = individualMultipliers[rowKey];
     const payment = calculatePayment(row[1], row[4], srbnMultiplier, hfexMultiplier, individualMultiplier);
-    const defaultMultiplier = row[1] && row[1].toString().toUpperCase().includes('SRBN') ? srbnMultiplier : 
-                             row[1] && row[1].toString().toUpperCase().includes('HF-EX') ? hfexMultiplier : 0;
+    const defaultMultiplier = row[1] && row[1].toString().toUpperCase().includes('HF-EX') ? hfexMultiplier : 
+                             row[1] && row[1].toString().toUpperCase().includes('SRBN') ? srbnMultiplier : 0;
     const rowWithPayment = [...row, individualMultiplier || defaultMultiplier, payment];
     result.push(rowWithPayment);
     
@@ -199,7 +206,8 @@ const summarizeDataDetailed = (data: any[][], srbnMultiplier: number, hfexMultip
       summaries[date].index4Sum += row[4];
       
       // Calculate payment for this row using individual multiplier if available
-      const individualMultiplier = individualMultipliers[`${rowIndex}-8`];
+      const rowKey = generateRowKey(row, 'J-P');
+      const individualMultiplier = individualMultipliers[rowKey];
       const payment = calculatePayment(row[1], row[4], srbnMultiplier, hfexMultiplier, individualMultiplier);
       summaries[date].paymentSum += payment;
     }
@@ -229,10 +237,11 @@ const summarizeDataDetailed = (data: any[][], srbnMultiplier: number, hfexMultip
     }
 
     // Add the current row to the result with payment column and multiplier column
-    const individualMultiplier = individualMultipliers[`${rowIndex}-8`];
+    const rowKey = generateRowKey(row, 'J-P');
+    const individualMultiplier = individualMultipliers[rowKey];
     const payment = calculatePayment(row[1], row[4], srbnMultiplier, hfexMultiplier, individualMultiplier);
-    const defaultMultiplier = row[1] && row[1].toString().toUpperCase().includes('SRBN') ? srbnMultiplier : 
-                             row[1] && row[1].toString().toUpperCase().includes('HF-EX') ? hfexMultiplier : 0;
+    const defaultMultiplier = row[1] && row[1].toString().toUpperCase().includes('HF-EX') ? hfexMultiplier : 
+                             row[1] && row[1].toString().toUpperCase().includes('SRBN') ? srbnMultiplier : 0;
     const rowWithPayment = [...row, individualMultiplier || defaultMultiplier, payment];
     result.push(rowWithPayment);
 
@@ -273,7 +282,8 @@ const summarizeDataByName = (data: any[][], srbnMultiplier: number, hfexMultipli
       summaries[name].index4Sum += row[4];
       
       // Calculate payment for this row using individual multiplier if available
-      const individualMultiplier = individualMultipliers[`${rowIndex}-9`];
+      const rowKey = generateRowKey(row, 'BY-NAME');
+      const individualMultiplier = individualMultipliers[rowKey];
       const payment = calculatePayment(row[1], row[4], srbnMultiplier, hfexMultiplier, individualMultiplier);
       summaries[name].paymentSum += payment;
     }
@@ -304,10 +314,11 @@ const summarizeDataByName = (data: any[][], srbnMultiplier: number, hfexMultipli
     }
 
     // Add the current row to the result with payment column and multiplier column
-    const individualMultiplier = individualMultipliers[`${rowIndex}-9`];
+    const rowKey = generateRowKey(row, 'BY-NAME');
+    const individualMultiplier = individualMultipliers[rowKey];
     const payment = calculatePayment(row[1], row[4], srbnMultiplier, hfexMultiplier, individualMultiplier);
-    const defaultMultiplier = row[1] && row[1].toString().toUpperCase().includes('SRBN') ? srbnMultiplier : 
-                             row[1] && row[1].toString().toUpperCase().includes('HF-EX') ? hfexMultiplier : 0;
+    const defaultMultiplier = row[1] && row[1].toString().toUpperCase().includes('HF-EX') ? hfexMultiplier : 
+                             row[1] && row[1].toString().toUpperCase().includes('SRBN') ? srbnMultiplier : 0;
     const rowWithPayment = [...row, individualMultiplier || defaultMultiplier, payment];
     result.push(rowWithPayment);
 
@@ -348,7 +359,8 @@ const summarizeDataDetailedByName = (data: any[][], srbnMultiplier: number, hfex
       summaries[name].index4Sum += row[4];
       
       // Calculate payment for this row using individual multiplier if available
-      const individualMultiplier = individualMultipliers[`${rowIndex}-8`];
+      const rowKey = generateRowKey(row, 'BY-NAME-DETAILED');
+      const individualMultiplier = individualMultipliers[rowKey];
       const payment = calculatePayment(row[1], row[4], srbnMultiplier, hfexMultiplier, individualMultiplier);
       summaries[name].paymentSum += payment;
     }
@@ -378,10 +390,11 @@ const summarizeDataDetailedByName = (data: any[][], srbnMultiplier: number, hfex
     }
 
     // Add the current row to the result with payment column and multiplier column
-    const individualMultiplier = individualMultipliers[`${rowIndex}-8`];
+    const rowKey = generateRowKey(row, 'BY-NAME-DETAILED');
+    const individualMultiplier = individualMultipliers[rowKey];
     const payment = calculatePayment(row[1], row[4], srbnMultiplier, hfexMultiplier, individualMultiplier);
-    const defaultMultiplier = row[1] && row[1].toString().toUpperCase().includes('SRBN') ? srbnMultiplier : 
-                             row[1] && row[1].toString().toUpperCase().includes('HF-EX') ? hfexMultiplier : 0;
+    const defaultMultiplier = row[1] && row[1].toString().toUpperCase().includes('HF-EX') ? hfexMultiplier : 
+                             row[1] && row[1].toString().toUpperCase().includes('SRBN') ? srbnMultiplier : 0;
     const rowWithPayment = [...row, individualMultiplier || defaultMultiplier, payment];
     result.push(rowWithPayment);
 
@@ -418,10 +431,10 @@ const calculatePayment = (name: string, pont2: number, srbnMultiplier: number, h
     multiplier = individualMultiplier;
   } else {
     const nameStr = name.toString().toUpperCase();
-    if (nameStr.includes('SRBN')) {
-      multiplier = srbnMultiplier;
-    } else if (nameStr.includes('HF-EX')) {
+    if (nameStr.includes('HF-EX')) {
       multiplier = hfexMultiplier;
+    } else if (nameStr.includes('SRBN')) {
+      multiplier = srbnMultiplier;
     }
   }
   
@@ -437,6 +450,12 @@ const calculatePayment = (name: string, pont2: number, srbnMultiplier: number, h
 };
 
 // Note: excelSerialToDate function is assumed to be defined elsewhere
+
+// Function to check if a date string contains weekend days
+const isWeekendDate = (dateString: string): boolean => {
+  if (!dateString || typeof dateString !== 'string') return false;
+  return dateString.includes('Szombat') || dateString.includes('Vasárnap');
+};
 
 export default function Home() { 
   const [isDragOver, setIsDragOver] = useState(false);
@@ -686,31 +705,31 @@ export default function Home() {
     if (isSelected) {
       // Get all row keys for the current table
       let data: any[][] = [];
-      let multiplierColumnIndex = 9; // Default for A-I tables
+      let tablePrefix = '';
       
       switch (tableType) {
         case 'A-I':
           data = columnsAtoI.slice(1);
-          multiplierColumnIndex = 9;
+          tablePrefix = 'A-I';
           break;
         case 'J-P':
           data = columnsJtoP;
-          multiplierColumnIndex = 8;
+          tablePrefix = 'J-P';
           break;
         case 'Név szerinti összegzés':
           data = columnsByName;
-          multiplierColumnIndex = 9;
+          tablePrefix = 'BY-NAME';
           break;
         case 'Név szerinti összegzés túlóra kimutatás':
           data = columnsByNameDetailed;
-          multiplierColumnIndex = 8;
+          tablePrefix = 'BY-NAME-DETAILED';
           break;
       }
       
       const allRowKeys = data
         .filter((row: any[]) => row && row.some(cell => cell !== null && cell !== undefined && cell !== ''))
         .filter((row: any[]) => !(row[0] && typeof row[0] === 'string' && row[0].includes('ÖSSZEGZÉS')))
-        .map((_, index) => `${index}-${multiplierColumnIndex}`);
+        .map((row: any[]) => generateRowKey(row, tablePrefix));
       
       setSelectedRows(new Set(allRowKeys));
     } else {
@@ -957,28 +976,26 @@ export default function Home() {
     }
 
     // Helper to add notes and multipliers to rows
-    const addNotesToRows = (rows: any[][], startIndex: number = 0, isDetailed: boolean = false) => {
+    const addNotesToRows = (rows: any[][], tablePrefix: string, isDetailed: boolean = false) => {
       return rows.map((row, idx) => {
         const rowWithNotes = [...row];
+        const rowKey = generateRowKey(row, tablePrefix);
+        
         if (isDetailed) {
           // For detailed tables: notes at index 7, multipliers at index 8
           if (rowWithNotes.length >= 7) {
-            const noteKey = `${startIndex + idx}-7`;
-            rowWithNotes[7] = notes[noteKey] || rowWithNotes[7] || '';
+            rowWithNotes[7] = notes[`${rowKey}-note`] || rowWithNotes[7] || '';
           }
           if (rowWithNotes.length >= 8) {
-            const multiplierKey = `${startIndex + idx}-8`;
-            rowWithNotes[8] = multipliers[multiplierKey] || rowWithNotes[8] || '';
+            rowWithNotes[8] = multipliers[rowKey] || rowWithNotes[8] || '';
           }
         } else {
           // For standard tables: notes at index 8, multipliers at index 9
           if (rowWithNotes.length >= 8) {
-            const noteKey = `${startIndex + idx}-8`;
-            rowWithNotes[8] = notes[noteKey] || rowWithNotes[8] || '';
+            rowWithNotes[8] = notes[`${rowKey}-note`] || rowWithNotes[8] || '';
           }
           if (rowWithNotes.length >= 9) {
-            const multiplierKey = `${startIndex + idx}-9`;
-            rowWithNotes[9] = multipliers[multiplierKey] || rowWithNotes[9] || '';
+            rowWithNotes[9] = multipliers[rowKey] || rowWithNotes[9] || '';
           }
         }
         return rowWithNotes;
@@ -1071,8 +1088,9 @@ export default function Home() {
         
         // Add notes to data rows
         const isDetailed = type === 'J-P';
-        const dataRowsWithNotes = addNotesToRows(dataRows, 0, isDetailed);
-        const summaryRowsWithNotes = addNotesToRows(summaryRows, dataRows.length, isDetailed);
+        const tablePrefix = type === 'J-P' ? 'J-P' : 'A-I';
+        const dataRowsWithNotes = addNotesToRows(dataRows, tablePrefix, isDetailed);
+        const summaryRowsWithNotes = addNotesToRows(summaryRows, tablePrefix, isDetailed);
         
         addSheet(date, isDetailed ? headersDetailed : headers, [...dataRowsWithNotes, ...summaryRowsWithNotes]);
       });
@@ -1092,8 +1110,9 @@ export default function Home() {
         
         // Add notes to data rows
         const isDetailed = type === 'Név szerinti összegzés túlóra kimutatás';
-        const dataRowsWithNotes = addNotesToRows(dataRows, 0, isDetailed);
-        const summaryRowsWithNotes = addNotesToRows(summaryRows, dataRows.length, isDetailed);
+        const tablePrefix = type === 'Név szerinti összegzés túlóra kimutatás' ? 'BY-NAME-DETAILED' : 'BY-NAME';
+        const dataRowsWithNotes = addNotesToRows(dataRows, tablePrefix, isDetailed);
+        const summaryRowsWithNotes = addNotesToRows(summaryRows, tablePrefix, isDetailed);
         
         addSheet(name, isDetailed ? headersDetailed : headers, [...dataRowsWithNotes, ...summaryRowsWithNotes]);
       });
@@ -1419,6 +1438,7 @@ export default function Home() {
                                   .map((row: any[], rowIndex: number) => {
                                   // Check if this is a summary row
                                   const isSummaryRow = row[0] && typeof row[0] === 'string' && row[0].includes('ÖSSZEGZÉS');
+                                  const rowKey = generateRowKey(row, 'A-I');
                                   
                                   return (
                                     <tr 
@@ -1433,42 +1453,53 @@ export default function Home() {
                                         {!isSummaryRow && (
                                           <input
                                             type="checkbox"
-                                            checked={selectedRows.has(`${rowIndex}-9`)}
-                                            onChange={(e) => handleRowSelection(`${rowIndex}-9`, e.target.checked)}
+                                            checked={selectedRows.has(rowKey)}
+                                            onChange={(e) => handleRowSelection(rowKey, e.target.checked)}
                                             className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                                           />
                                         )}
                                       </td>
-                                      {row.map((cell: any, cellIndex: number) => (
-                                        <td
-                                          key={cellIndex}
-                                          className={`px-6 py-4 whitespace-nowrap text-sm ${
-                                            isSummaryRow 
-                                              ? 'text-blue-800 dark:text-blue-200 font-medium' 
-                                              : 'text-gray-900 dark:text-gray-300'
-                                          }`}
-                                        >
-                                          {cellIndex === 8 ? (
-                                            <input
-                                              type="text"
-                                              value={notes[`${rowIndex}-${cellIndex}`] || ''}
-                                              onChange={(e) => handleNoteChange(`${rowIndex}-${cellIndex}`, e.target.value)}
-                                              placeholder="Megjegyzés..."
-                                              className="w-full min-w-[120px] px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
-                                            />
-                                          ) : cellIndex === 9 ? (
-                                            <input
-                                              type="number"
-                                              step="0.1"
-                                              value={multipliers[`${rowIndex}-${cellIndex}`] || cell || ''}
-                                              onChange={(e) => handleMultiplierChange(`${rowIndex}-${cellIndex}`, Number(e.target.value))}
-                                              placeholder="Szorzó"
-                                              className="w-full min-w-[80px] px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
-                                            />
-                                          ) : cellIndex === 6 || cellIndex === 5 ? formatHungarianDate(cell) : cellIndex === 3 || cellIndex === 4 || cellIndex === 10 ? formatDecimal(cell) : cellIndex === 7 ? formatTime(cell) : cell || ''}
-                                          {cellIndex === 10 ? ' Ft' : ''}
-                                        </td>
-                                      ))}
+                                      {row.map((cell: any, cellIndex: number) => {
+                                        const formattedDate = cellIndex === 2 ? formatHungarianDate(cell) : null;
+                                        const isWeekend = formattedDate && isWeekendDate(formattedDate);
+                                        
+                                        return (
+                                          <td
+                                            key={cellIndex}
+                                            className={`px-6 py-4 whitespace-nowrap text-sm ${
+                                              isSummaryRow 
+                                                ? 'text-blue-800 dark:text-blue-200 font-medium' 
+                                                : cellIndex === 2 && isWeekend
+                                                  ? 'text-red-600 dark:text-red-400 font-medium'
+                                                  : 'text-gray-900 dark:text-gray-300'
+                                            }`}
+                                          >
+                                            {cellIndex === 8 ? (
+                                              <input
+                                                type="text"
+                                                value={notes[`${rowKey}-note`] || ''}
+                                                onChange={(e) => handleNoteChange(`${rowKey}-note`, e.target.value)}
+                                                placeholder="Megjegyzés..."
+                                                className="w-full min-w-[120px] px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+                                              />
+                                            ) : cellIndex === 9 ? (
+                                              <input
+                                                type="number"
+                                                step="0.1"
+                                                value={multipliers[rowKey] || cell || ''}
+                                                onChange={(e) => handleMultiplierChange(rowKey, Number(e.target.value))}
+                                                placeholder="Szorzó"
+                                                className="w-full min-w-[80px] px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+                                              />
+                                            ) : cellIndex === 2 ? (
+                                              <span className={isWeekend ? 'text-red-600 dark:text-red-400 font-medium' : ''}>
+                                                {formattedDate}
+                                              </span>
+                                            ) : cellIndex === 6 || cellIndex === 5 ? formatHungarianDate(cell) : cellIndex === 3 || cellIndex === 4 || cellIndex === 10 ? formatDecimal(cell) : cellIndex === 7 ? formatTime(cell) : cell || ''}
+                                            {cellIndex === 10 ? ' Ft' : ''}
+                                          </td>
+                                        );
+                                      })}
                                     </tr>
                                   );
                                 })}
@@ -1538,6 +1569,7 @@ export default function Home() {
                                   .map((row: any[], rowIndex: number) => {
                                   // Check if this is a summary row
                                   const isSummaryRow = row[0] && typeof row[0] === 'string' && row[0].includes('ÖSSZEGZÉS');
+                                  const rowKey = generateRowKey(row, 'J-P');
                                   
                                   return (
                                     <tr 
@@ -1552,42 +1584,53 @@ export default function Home() {
                                         {!isSummaryRow && (
                                           <input
                                             type="checkbox"
-                                            checked={selectedRows.has(`${rowIndex}-8`)}
-                                            onChange={(e) => handleRowSelection(`${rowIndex}-8`, e.target.checked)}
+                                            checked={selectedRows.has(rowKey)}
+                                            onChange={(e) => handleRowSelection(rowKey, e.target.checked)}
                                             className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                                           />
                                         )}
                                       </td>
-                                      {row.map((cell: any, cellIndex: number) => (
-                                        <td
-                                          key={cellIndex}
-                                          className={`px-6 py-4 whitespace-nowrap text-sm ${
-                                            isSummaryRow 
-                                              ? 'text-blue-800 dark:text-blue-200 font-medium' 
-                                              : 'text-gray-900 dark:text-gray-300'
-                                          }`}
-                                        >
-                                          {cellIndex === 7 ? (
-                                            <input
-                                              type="text"
-                                              value={notes[`${rowIndex}-${cellIndex}`] || ''}
-                                              onChange={(e) => handleNoteChange(`${rowIndex}-${cellIndex}`, e.target.value)}
-                                              placeholder="Megjegyzés..."
-                                              className="w-full min-w-[120px] px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
-                                            />
-                                          ) : cellIndex === 8 ? (
-                                            <input
-                                              type="number"
-                                              step="0.1"
-                                              value={multipliers[`${rowIndex}-${cellIndex}`] || cell || ''}
-                                              onChange={(e) => handleMultiplierChange(`${rowIndex}-${cellIndex}`, Number(e.target.value))}
-                                              placeholder="Szorzó"
-                                              className="w-full min-w-[80px] px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
-                                            />
-                                          ) : cellIndex === 9 ? formatDecimal(cell) : cellIndex === 3 || cellIndex === 4 ? formatDecimal(cell) : cellIndex === 5 || cellIndex === 6 ? formatHungarianDate(cell, true) : cell || ''}
-                                          {cellIndex === 9 ? ' Ft' : ''}
+                                      {row.map((cell: any, cellIndex: number) => {
+                                        const formattedDate = cellIndex === 2 ? formatHungarianDate(cell) : null;
+                                        const isWeekend = formattedDate && isWeekendDate(formattedDate);
+                                        
+                                        return (
+                                          <td
+                                            key={cellIndex}
+                                            className={`px-6 py-4 whitespace-nowrap text-sm ${
+                                              isSummaryRow 
+                                                ? 'text-blue-800 dark:text-blue-200 font-medium' 
+                                                : cellIndex === 2 && isWeekend
+                                                  ? 'text-red-600 dark:text-red-400 font-medium'
+                                                  : 'text-gray-900 dark:text-gray-300'
+                                            }`}
+                                          >
+                                            {cellIndex === 7 ? (
+                                              <input
+                                                type="text"
+                                                value={notes[`${rowKey}-note`] || ''}
+                                                onChange={(e) => handleNoteChange(`${rowKey}-note`, e.target.value)}
+                                                placeholder="Megjegyzés..."
+                                                className="w-full min-w-[120px] px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+                                              />
+                                            ) : cellIndex === 8 ? (
+                                              <input
+                                                type="number"
+                                                step="0.1"
+                                                value={multipliers[rowKey] || cell || ''}
+                                                onChange={(e) => handleMultiplierChange(rowKey, Number(e.target.value))}
+                                                placeholder="Szorzó"
+                                                className="w-full min-w-[80px] px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+                                              />
+                                            ) : cellIndex === 2 ? (
+                                              <span className={isWeekend ? 'text-red-600 dark:text-red-400 font-medium' : ''}>
+                                                {formattedDate}
+                                              </span>
+                                            ) : cellIndex === 9 ? formatDecimal(cell) : cellIndex === 3 || cellIndex === 4 ? formatDecimal(cell) : cellIndex === 5 || cellIndex === 6 ? formatHungarianDate(cell, true) : cell || ''}
+                                            {cellIndex === 9 ? ' Ft' : ''}
                                           </td>
-                                      ))}
+                                        );
+                                      })}
                                     </tr>
                                   );
                                 })}
@@ -1667,6 +1710,7 @@ export default function Home() {
                                   .map((row: any[], rowIndex: number) => {
                                   // Check if this is a summary row
                                   const isSummaryRow = row[0] && typeof row[0] === 'string' && row[0].includes('ÖSSZEGZÉS');
+                                  const rowKey = generateRowKey(row, 'BY-NAME');
                                   
                                   return (
                                     <tr 
@@ -1681,42 +1725,53 @@ export default function Home() {
                                         {!isSummaryRow && (
                                           <input
                                             type="checkbox"
-                                            checked={selectedRows.has(`${rowIndex}-9`)}
-                                            onChange={(e) => handleRowSelection(`${rowIndex}-9`, e.target.checked)}
+                                            checked={selectedRows.has(rowKey)}
+                                            onChange={(e) => handleRowSelection(rowKey, e.target.checked)}
                                             className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                                           />
                                         )}
                                       </td>
-                                      {row.map((cell: any, cellIndex: number) => (
-                                        <td
-                                          key={cellIndex}
-                                          className={`px-6 py-4 whitespace-nowrap text-sm ${
-                                            isSummaryRow 
-                                              ? 'text-blue-800 dark:text-blue-200 font-medium' 
-                                              : 'text-gray-900 dark:text-gray-300'
-                                          }`}
-                                                                                  >
+                                      {row.map((cell: any, cellIndex: number) => {
+                                        const formattedDate = cellIndex === 2 ? formatHungarianDate(cell) : null;
+                                        const isWeekend = formattedDate && isWeekendDate(formattedDate);
+                                        
+                                        return (
+                                          <td
+                                            key={cellIndex}
+                                            className={`px-6 py-4 whitespace-nowrap text-sm ${
+                                              isSummaryRow 
+                                                ? 'text-blue-800 dark:text-blue-200 font-medium' 
+                                                : cellIndex === 2 && isWeekend
+                                                  ? 'text-red-600 dark:text-red-400 font-medium'
+                                                  : 'text-gray-900 dark:text-gray-300'
+                                            }`}
+                                          >
                                             {cellIndex === 8 ? (
-                                            <input
-                                              type="text"
-                                              value={notes[`${rowIndex}-${cellIndex}`] || ''}
-                                              onChange={(e) => handleNoteChange(`${rowIndex}-${cellIndex}`, e.target.value)}
-                                              placeholder="Megjegyzés..."
-                                              className="w-full min-w-[120px] px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
-                                            />
-                                          ) : cellIndex === 9 ? (
-                                            <input
-                                              type="number"
-                                              step="0.1"
-                                              value={multipliers[`${rowIndex}-${cellIndex}`] || cell || ''}
-                                              onChange={(e) => handleMultiplierChange(`${rowIndex}-${cellIndex}`, Number(e.target.value))}
-                                              placeholder="Szorzó"
-                                              className="w-full min-w-[80px] px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
-                                            />
-                                          ) : cellIndex === 6 || cellIndex === 5 ? formatHungarianDate(cell) : cellIndex === 3 || cellIndex === 4 || cellIndex === 10 ? formatDecimal(cell) : cellIndex === 7 ? formatTime(cell) : cell || ''}
+                                              <input
+                                                type="text"
+                                                value={notes[`${rowKey}-note`] || ''}
+                                                onChange={(e) => handleNoteChange(`${rowKey}-note`, e.target.value)}
+                                                placeholder="Megjegyzés..."
+                                                className="w-full min-w-[120px] px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+                                              />
+                                            ) : cellIndex === 9 ? (
+                                              <input
+                                                type="number"
+                                                step="0.1"
+                                                value={multipliers[rowKey] || cell || ''}
+                                                onChange={(e) => handleMultiplierChange(rowKey, Number(e.target.value))}
+                                                placeholder="Szorzó"
+                                                className="w-full min-w-[80px] px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+                                              />
+                                            ) : cellIndex === 2 ? (
+                                              <span className={isWeekend ? 'text-red-600 dark:text-red-400 font-medium' : ''}>
+                                                {formattedDate}
+                                              </span>
+                                            ) : cellIndex === 6 || cellIndex === 5 ? formatHungarianDate(cell) : cellIndex === 3 || cellIndex === 4 || cellIndex === 10 ? formatDecimal(cell) : cellIndex === 7 ? formatTime(cell) : cell || ''}
                                             {cellIndex === 10 ? ' Ft' : ''}
                                           </td>
-                                      ))}
+                                        );
+                                      })}
                                     </tr>
                                   );
                                 })}
@@ -1785,6 +1840,7 @@ export default function Home() {
                                   .map((row: any[], rowIndex: number) => {
                                   // Check if this is a summary row
                                   const isSummaryRow = row[0] && typeof row[0] === 'string' && row[0].includes('ÖSSZEGZÉS');
+                                  const rowKey = generateRowKey(row, 'BY-NAME-DETAILED');
                                   
                                   return (
                                     <tr 
@@ -1799,42 +1855,53 @@ export default function Home() {
                                         {!isSummaryRow && (
                                           <input
                                             type="checkbox"
-                                            checked={selectedRows.has(`${rowIndex}-8`)}
-                                            onChange={(e) => handleRowSelection(`${rowIndex}-8`, e.target.checked)}
+                                            checked={selectedRows.has(rowKey)}
+                                            onChange={(e) => handleRowSelection(rowKey, e.target.checked)}
                                             className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                                           />
                                         )}
                                       </td>
-                                      {row.map((cell: any, cellIndex: number) => (
-                                        <td
-                                          key={cellIndex}
-                                          className={`px-6 py-4 whitespace-nowrap text-sm ${
-                                            isSummaryRow 
-                                              ? 'text-blue-800 dark:text-blue-200 font-medium' 
-                                              : 'text-gray-900 dark:text-gray-300'
-                                          }`}
-                                        >
-                                          {cellIndex === 7 ? (
-                                            <input
-                                              type="text"
-                                              value={notes[`${rowIndex}-${cellIndex}`] || ''}
-                                              onChange={(e) => handleNoteChange(`${rowIndex}-${cellIndex}`, e.target.value)}
-                                              placeholder="Megjegyzés..."
-                                              className="w-full min-w-[120px] px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
-                                            />
-                                          ) : cellIndex === 8 ? (
-                                            <input
-                                              type="number"
-                                              step="0.1"
-                                              value={multipliers[`${rowIndex}-${cellIndex}`] || cell || ''}
-                                              onChange={(e) => handleMultiplierChange(`${rowIndex}-${cellIndex}`, Number(e.target.value))}
-                                              placeholder="Szorzó"
-                                              className="w-full min-w-[80px] px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
-                                            />
-                                          ) : cellIndex === 9 ? formatDecimal(cell) : cellIndex === 3 || cellIndex === 4 ? formatDecimal(cell) : cellIndex === 5 || cellIndex === 6 ? formatHungarianDate(cell, true) : cell || ''}
-                                          {cellIndex === 9 ? ' Ft' : ''}
+                                      {row.map((cell: any, cellIndex: number) => {
+                                        const formattedDate = cellIndex === 2 ? formatHungarianDate(cell) : null;
+                                        const isWeekend = formattedDate && isWeekendDate(formattedDate);
+                                        
+                                        return (
+                                          <td
+                                            key={cellIndex}
+                                            className={`px-6 py-4 whitespace-nowrap text-sm ${
+                                              isSummaryRow 
+                                                ? 'text-blue-800 dark:text-blue-200 font-medium' 
+                                                : cellIndex === 2 && isWeekend
+                                                  ? 'text-red-600 dark:text-red-400 font-medium'
+                                                  : 'text-gray-900 dark:text-gray-300'
+                                            }`}
+                                          >
+                                            {cellIndex === 7 ? (
+                                              <input
+                                                type="text"
+                                                value={notes[`${rowKey}-note`] || ''}
+                                                onChange={(e) => handleNoteChange(`${rowKey}-note`, e.target.value)}
+                                                placeholder="Megjegyzés..."
+                                                className="w-full min-w-[120px] px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+                                              />
+                                            ) : cellIndex === 8 ? (
+                                              <input
+                                                type="number"
+                                                step="0.1"
+                                                value={multipliers[rowKey] || cell || ''}
+                                                onChange={(e) => handleMultiplierChange(rowKey, Number(e.target.value))}
+                                                placeholder="Szorzó"
+                                                className="w-full min-w-[80px] px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+                                              />
+                                            ) : cellIndex === 2 ? (
+                                              <span className={isWeekend ? 'text-red-600 dark:text-red-400 font-medium' : ''}>
+                                                {formattedDate}
+                                              </span>
+                                            ) : cellIndex === 9 ? formatDecimal(cell) : cellIndex === 3 || cellIndex === 4 ? formatDecimal(cell) : cellIndex === 5 || cellIndex === 6 ? formatHungarianDate(cell, true) : cell || ''}
+                                            {cellIndex === 9 ? ' Ft' : ''}
                                           </td>
-                                      ))}
+                                        );
+                                      })}
                                     </tr>
                                   );
                                 })}
